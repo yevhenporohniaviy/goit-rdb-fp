@@ -1,0 +1,93 @@
+1. 
+
+CREATE SCHEMA pandemic;
+USE pandemic;
+
+2. 
+USE pandemic;
+
+CREATE TABLE countries(
+id INT PRIMARY KEY AUTO_INCREMENT,
+code VARCHAR(8) UNIQUE,
+country VARCHAR(32) NOT NULL UNIQUE
+);
+
+INSERT INTO countries (code, country)
+SELECT DISTINCT code, entity FROM infectious_cases;
+
+CREATE TABLE cases_normalized
+AS SELECT * FROM infectious_cases;
+
+ALTER TABLE cases_normalized
+ADD id INT PRIMARY KEY AUTO_INCREMENT FIRST,
+ADD country_id INT AFTER id,
+ADD CONSTRAINT fk_country_id FOREIGN KEY (country_id) REFERENCES countries(id);
+
+UPDATE cases_normalized i
+JOIN countries c ON i.code = c.code
+SET i.country_id = c.id
+WHERE i.id > 0;
+
+ALTER TABLE cases_normalized
+DROP COLUMN entity,
+DROP COLUMN code;
+
+SELECT * FROM cases_normalized;
+
+3. 
+
+USE pandemic; 
+SELECT 
+    c.country AS Entity, 
+    c.code AS Code,
+    AVG(cn.Number_rabies) AS Average_Rabies,
+    MIN(cn.Number_rabies) AS Minimum_Rabies,
+    MAX(cn.Number_rabies) AS Maximum_Rabies,
+    SUM(cn.Number_rabies) AS Total_Rabies
+FROM 
+    cases_normalized cn
+JOIN 
+    countries c ON cn.country_id = c.id
+WHERE 
+    cn.Number_rabies IS NOT NULL AND cn.Number_rabies <> ''
+GROUP BY 
+    c.country, c.code
+ORDER BY 
+    Average_Rabies DESC
+LIMIT 
+    10;
+
+
+4. 
+SELECT Entity, Code, Year, 
+CONCAT(Year, "-01-01") AS year_start_date
+FROM infectious_cases;
+
+SELECT Entity, Code, Year, 
+CURDATE() AS year_current_date
+FROM infectious_cases;
+
+
+SELECT Entity, Code, Year,
+TIMESTAMPDIFF(YEAR, CONCAT(Year, '-01-01'), CURDATE()) AS difference_year
+FROM infectious_cases;
+
+5. 
+
+DROP FUNCTION IF EXISTS fn_subtract_now_year;
+
+DELIMITER //
+
+CREATE FUNCTION fn_subtract_now_year(year INT)
+RETURNS int
+DETERMINISTIC
+NO SQL
+BEGIN
+	DECLARE result INT;
+    SET result = YEAR(CURDATE()) - year;
+    RETURN result;
+END //
+
+DELIMITER ;
+
+SELECT fn_subtract_now_year(2002)  
